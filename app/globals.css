@@ -1,26 +1,57 @@
+/* app/globals.css */
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+	/* Colors - Foundational & Neutrals */
+	--color-canvas: #0a0a0a;
+	--color-surface: #141419;
+	--color-surface-elevated: #1a1a22;
+	--color-surface-modal: #23232f;
+
+	--color-primary: #ffffff;
+	--color-secondary: #9e9eb2;
+	--color-ghost: #62627a;
+
+	/* Colors - Semantic Telemetry */
+	--color-electric: #3b82f6;
+	--color-electric-hover: #60a5fa;
+
+	--color-positive: #10b981;
+	--color-positive-text: #34d399;
+	--color-positive-bg: rgba(16, 185, 129, 0.12);
+
+	--color-negative: #ef4444;
+	--color-negative-text: #f87171;
+	--color-negative-bg: rgba(239, 68, 68, 0.12);
+
+	/* Typography mapping to next/font CSS variables */
+	--font-structural: var(--font-geist), sans-serif;
+	--font-body: var(--font-jakarta), sans-serif;
+	--font-mono: var(--font-jetbrains), monospace;
+
+	/* Custom Elevation & Radiance */
+	--shadow-glow: 0 0 16px rgba(59, 130, 246, 0.35);
+	--shadow-panel: 0 16px 32px -8px rgba(0, 0, 0, 0.65);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* Base resets & dark mode essentials */
+@layer base {
+	body {
+		@apply bg-canvas text-primary font-body antialiased selection:bg-electric selection:text-white;
+	}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+	/* Custom scrollbar for data tables and chat */
+	::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		@apply bg-white/10 rounded-full;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		@apply bg-white/20;
+	}
 }
