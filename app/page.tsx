@@ -147,10 +147,13 @@ export default function XAIBankAnalyzerV2() {
 			const job = r.raw_data.job || "unknown";
 			counts[job] = (counts[job] || 0) + 1;
 		});
-		return Object.entries(counts)
-			.map(([job, count]) => ({ job, count }))
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 5); // Top 5
+		return (
+			Object.entries(counts)
+				// FIX: Uppercase the string directly here in the data array
+				.map(([job, count]) => ({ job: job.toUpperCase(), count }))
+				.sort((a, b) => b.count - a.count)
+				.slice(0, 5)
+		); // Top 5
 	}, [data]);
 
 	// 3. SHAP Chart Data for Selected Customer
@@ -490,7 +493,6 @@ export default function XAIBankAnalyzerV2() {
 												fill: "#A0A0A0",
 												fontSize: 10,
 												fontFamily: "monospace",
-												textTransform: "uppercase",
 											}}
 											axisLine={false}
 											tickLine={false}
