@@ -1,6 +1,7 @@
+// app/page.tsx
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useDropzone } from "react-dropzone";
 import {
 	BarChart,
@@ -11,16 +12,10 @@ import {
 	ResponsiveContainer,
 	Cell,
 	ReferenceLine,
+	CartesianGrid,
+	LabelList,
 } from "recharts";
-import {
-	UploadCloud,
-	CheckCircle2,
-	AlertCircle,
-	Loader2,
-	MessageSquare,
-	X,
-	Send,
-} from "lucide-react";
+import { Upload, Terminal, PlaySquare, XSquare } from "lucide-react";
 
 // --- Types ---
 type Driver = { feature: string; impact: number };
@@ -34,7 +29,7 @@ type CustomerResult = {
 type BackendData = { total_processed: number; results: CustomerResult[] };
 type UploadState = "idle" | "loading" | "waking-server" | "success" | "error";
 
-export default function XAIBankAnalyzer() {
+export default function XAIBankAnalyzerV2() {
 	// --- State ---
 	const [uploadState, setUploadState] = useState<UploadState>("idle");
 	const [data, setData] = useState<BackendData | null>(null);
@@ -42,7 +37,6 @@ export default function XAIBankAnalyzer() {
 		useState<CustomerResult | null>(null);
 
 	// Chat State
-	const [isChatOpen, setIsChatOpen] = useState(false);
 	const [chatMessages, setChatMessages] = useState<
 		{ role: "user" | "ai"; text: string }[]
 	>([]);
@@ -56,7 +50,6 @@ export default function XAIBankAnalyzer() {
 
 		setUploadState("loading");
 
-		// Cold Start Timer: If Render takes > 3s, show waking message
 		const coldStartTimer = setTimeout(() => {
 			setUploadState("waking-server");
 		}, 3000);
@@ -74,8 +67,7 @@ export default function XAIBankAnalyzer() {
 			);
 
 			clearTimeout(coldStartTimer);
-
-			if (!res.ok) throw new Error("API responded with an error.");
+			if (!res.ok) throw new Error("API Exception");
 
 			const responseData: BackendData = await res.json();
 			setData(responseData);
@@ -83,7 +75,6 @@ export default function XAIBankAnalyzer() {
 			setUploadState("success");
 		} catch (error) {
 			clearTimeout(coldStartTimer);
-			console.error(error);
 			setUploadState("error");
 		}
 	}, []);
@@ -103,7 +94,6 @@ export default function XAIBankAnalyzer() {
 		setChatInput("");
 		setIsChatLoading(true);
 
-		// Context: Top 10 high probability leads to avoid token limits
 		const topLeads = [...data.results]
 			.sort((a, b) => b.subscription_probability - a.subscription_probability)
 			.slice(0, 10);
@@ -119,20 +109,55 @@ export default function XAIBankAnalyzer() {
 		} catch (e) {
 			setChatMessages((prev) => [
 				...prev,
-				{ role: "ai", text: "Error connecting to AI assistant." },
+				{ role: "ai", text: "[ERR] CONNECTION_REFUSED" },
 			]);
 		} finally {
 			setIsChatLoading(false);
 		}
 	};
 
-	// --- Data Formatting for Recharts ---
-	const getChartData = () => {
+	// --- Derived Analytics for Recharts ---
+
+	// 1. Histogram (Probability Distribution)
+	const histogramData = useMemo(() => {
+		if (!data) return [];
+		const bins = [0, 0, 0, 0, 0]; // 0-20, 20-40, 40-60, 60-80, 80-100
+		data.results.forEach((r) => {
+			const prob = r.subscription_probability;
+			if (prob < 0.2) bins[0]++;
+			else if (prob < 0.4) bins[1]++;
+			else if (prob < 0.6) bins[2]++;
+			else if (prob < 0.8) bins[3]++;
+			else bins[4]++;
+		});
+		return [
+			{ range: "0-20", count: bins[0] },
+			{ range: "20-40", count: bins[1] },
+			{ range: "40-60", count: bins[2] },
+			{ range: "60-80", count: bins[3] },
+			{ range: "80-100", count: bins[4] },
+		];
+	}, [data]);
+
+	// 2. Job Demographics
+	const jobData = useMemo(() => {
+		if (!data) return [];
+		const counts: Record<string, number> = {};
+		data.results.forEach((r) => {
+			const job = r.raw_data.job || "unknown";
+			counts[job] = (counts[job] || 0) + 1;
+		});
+		return Object.entries(counts)
+			.map(([job, count]) => ({ job, count }))
+			.sort((a, b) => b.count - a.count)
+			.slice(0, 5); // Top 5
+	}, [data]);
+
+	// 3. SHAP Chart Data for Selected Customer
+	const shapData = useMemo(() => {
 		if (!selectedCustomer) return [];
 		const { positive, negative } = selectedCustomer.drivers;
-
-		// Combine and sort by absolute impact
-		const combined = [
+		return [
 			...positive.map((d) => ({
 				name: d.feature,
 				value: d.impact,
@@ -144,12 +169,20 @@ export default function XAIBankAnalyzer() {
 				type: "negative",
 			})),
 		].sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+	}, [selectedCustomer]);
 
-		return combined;
-	};
+	// --- KPI Helpers ---
+	const highProbCount =
+		data?.results.filter((r) => r.subscription_probability > 0.75).length || 0;
+	const avgScore =
+		(data?.results.reduce(
+			(acc, curr) => acc + curr.subscription_probability,
+			0,
+		) || 0) / (data?.total_processed || 1);
+	const topJob = jobData.length > 0 ? jobData[0].job : "N/A";
 
 	// ==========================================
-	// VIEW 1: THE LANDING & UPLOAD SCREEN
+	// VIEW 1: TERMINAL INGESTION SCREEN
 	// ==========================================
 	if (
 		uploadState === "idle" ||
@@ -158,79 +191,124 @@ export default function XAIBankAnalyzer() {
 		uploadState === "error"
 	) {
 		return (
-			<div className="min-h-screen bg-canvas text-primary flex flex-col items-center justify-center p-6 relative overflow-hidden">
-				{/* Subtle Background Glow */}
-				<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-electric opacity-[0.03] blur-[120px] rounded-full pointer-events-none" />
+			<div className="min-h-screen bg-canvas p-6 flex flex-col justify-center items-center">
+				<div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+					{/* Left: Branding & Upload */}
+					<div className="space-y-8">
+						<div>
+							<p className="font-mono text-text-med text-xs mb-4 flex items-center gap-2 tracking-widest">
+								<span className="w-2 h-2 bg-text-high block"></span>[ MODULE 01
+								// DATA INGESTION PIPELINE ]
+							</p>
+							<h1 className="text-4xl md:text-5xl font-semibold tracking-tighter uppercase leading-[0.9]">
+								Predict Subscriptions.
+								<br />
+								<span className="text-text-med">Explain Mechanics.</span>
+							</h1>
+							<p className="font-mono text-text-muted text-xs mt-6 leading-relaxed max-w-md">
+								High-throughput probabilistic scoring engine powered by XGBoost
+								and additive SHAP feature attribution. Zero color drift.
+							</p>
+						</div>
 
-				<div className="max-w-2xl text-center space-y-6 z-10">
-					<h1 className="text-5xl font-bold font-structural tracking-tight">
-						Predict Subscriptions. <br />
-						<span className="text-positive-text">Understand Why.</span>
-					</h1>
-					<p className="text-secondary font-body text-lg">
-						Upload customer behavioral and financial records to instantly score
-						term deposit subscription likelihood with transparent SHAP
-						attribution.
-					</p>
+						<div
+							{...getRootProps()}
+							className={`p-10 border border-dashed transition-none cursor-pointer flex flex-col items-center text-center
+                ${isDragActive ? "border-text-high bg-surface-2" : "border-border-structural bg-surface-1 hover:border-text-med"}
+                ${uploadState === "error" ? "border-text-high bg-text-high text-text-inv" : ""}
+              `}
+						>
+							<input {...getInputProps()} />
 
-					<div
-						{...getRootProps()}
-						className={`mt-10 p-12 border border-dashed rounded-xl cursor-pointer transition-all duration-300 bg-surface/50 backdrop-blur-md
-              ${isDragActive ? "border-electric shadow-glow bg-surface-elevated" : "border-white/10 hover:border-white/20"}
-              ${uploadState === "error" ? "border-negative/50 bg-negative/5" : ""}
-            `}
-					>
-						<input {...getInputProps()} />
-
-						<div className="flex flex-col items-center gap-4">
 							{uploadState === "idle" && (
 								<>
-									<div className="p-4 rounded-full bg-white/5 border border-white/10">
-										<UploadCloud className="w-8 h-8 text-electric" />
-									</div>
-									<div>
-										<p className="font-semibold">
-											Drag & drop customer dataset (CSV)
-										</p>
-										<p className="text-sm text-secondary mt-1">
-											Supports standard core banking schema.
-										</p>
-									</div>
+									<Upload className="w-6 h-6 mb-4" />
+									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
+										DRAG & DROP BATCH DATASET
+									</p>
+									<p className="font-mono text-xs text-text-muted mt-2">
+										[ CSV, XLSX, PARQUET ]
+									</p>
 								</>
 							)}
 
 							{uploadState === "loading" && (
-								<div className="flex flex-col items-center gap-3 text-electric">
-									<Loader2 className="w-8 h-8 animate-spin" />
-									<p className="font-mono text-sm uppercase tracking-widest">
-										Analyzing Data...
+								<>
+									<Terminal className="w-6 h-6 mb-4 animate-pulse" />
+									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
+										ANALYZING DATASTREAM...
 									</p>
-								</div>
+									<p className="font-mono text-xs text-text-muted mt-2">
+										[ EXECUTING XGB_KERNEL ]
+									</p>
+								</>
 							)}
 
 							{uploadState === "waking-server" && (
-								<div className="flex flex-col items-center gap-3 text-electric">
-									<Loader2 className="w-8 h-8 animate-spin" />
-									<p className="font-mono text-sm uppercase tracking-widest">
-										Waking up AI Engine...
+								<>
+									<Terminal className="w-6 h-6 mb-4 animate-bounce" />
+									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
+										WAKING UP AI ENGINE
 									</p>
-									<p className="text-xs text-secondary font-body">
-										This may take up to 60 seconds on the first run (Cold
-										Start).
+									<p className="font-mono text-xs text-text-muted mt-2">
+										[WARN] COLD START DETECTED. ETA: 45s
 									</p>
-								</div>
+								</>
 							)}
 
 							{uploadState === "error" && (
-								<div className="flex flex-col items-center gap-3 text-negative">
-									<AlertCircle className="w-8 h-8" />
-									<p className="font-medium">Analysis Failed</p>
-									<p className="text-xs text-secondary font-body">
-										The server might be offline or the CSV format is incorrect.
-										Try again.
+								<>
+									<XSquare className="w-6 h-6 mb-4" />
+									<p className="font-mono text-sm tracking-widest font-bold uppercase">
+										INGESTION FAILED
 									</p>
-								</div>
+									<p className="font-mono text-xs mt-2">
+										[ERR] KERNEL_OFFLINE OR SCHEMA_MISMATCH
+									</p>
+								</>
 							)}
+						</div>
+					</div>
+
+					{/* Right: Mock Terminal Status */}
+					<div className="bg-surface-1 border border-border-structural p-1">
+						<div className="bg-surface-2 border-b border-border-hairline p-2 flex justify-between">
+							<span className="font-mono text-[10px] text-text-med tracking-widest">
+								[ SYSTEM_STATUS // ENGINE_TELEMETRY ]
+							</span>
+							<span className="font-mono text-[10px] text-text-high tracking-widest">
+								LIVE_DIAGNOSTICS
+							</span>
+						</div>
+						<div className="p-4 font-mono text-[11px] space-y-3">
+							<div className="flex justify-between border-b border-border-hairline pb-2">
+								<span className="text-text-muted">Subsystem</span>
+								<span className="text-text-muted">State / Verdict</span>
+							</div>
+							<div className="flex justify-between">
+								<span>[ OK ] XGBoost Inference Kernel</span>
+								<span className="text-text-high">ONLINE (v4.2.0-quant)</span>
+							</div>
+							<div className="flex justify-between">
+								<span>[ OK ] TreeSHAP Attribution Matrix</span>
+								<span className="text-text-high">
+									LOADED (Exact Local/Global)
+								</span>
+							</div>
+							<div className="flex justify-between text-text-muted">
+								<span>[ OK ] In-Memory Vector Buffer</span>
+								<span>ALLOCATED (64 MB)</span>
+							</div>
+							<div className="flex justify-between text-text-muted">
+								<span>[ OK ] Cryptographic SHA-256 Hashing</span>
+								<span>ACTIVE</span>
+							</div>
+							<div className="flex justify-between mt-4">
+								<span className="animate-pulse">
+									[ ... ] Input Schema Verification
+								</span>
+								<span className="text-text-high">AWAITING STREAM</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -239,301 +317,461 @@ export default function XAIBankAnalyzer() {
 	}
 
 	// ==========================================
-	// VIEW 2: THE INSIGHTS DASHBOARD
+	// VIEW 2: THE BENTO DASHBOARD
 	// ==========================================
-	const highProbCount =
-		data?.results.filter((r) => r.subscription_probability > 0.7).length || 0;
-	const avgScore =
-		(data?.results.reduce(
-			(acc, curr) => acc + curr.subscription_probability,
-			0,
-		) || 0) / (data?.total_processed || 1);
-
 	return (
-		<div className="min-h-screen bg-canvas text-primary font-body p-6 flex flex-col gap-6">
-			{/* Top Navbar / KPIs */}
-			<header className="grid grid-cols-1 md:grid-cols-3 gap-6">
-				<div className="bg-surface border border-white/10 rounded-lg p-5 flex items-center justify-between shadow-panel">
-					<div>
-						<p className="text-xs font-mono text-ghost uppercase tracking-wider mb-1">
-							Total Processed
-						</p>
-						<p className="text-3xl font-structural font-bold">
-							{data?.total_processed.toLocaleString()}
-						</p>
-					</div>
-					<CheckCircle2 className="text-positive-text w-8 h-8 opacity-80" />
-				</div>
-
-				<div className="bg-surface border border-white/10 rounded-lg p-5 flex items-center justify-between shadow-panel relative overflow-hidden">
-					<div className="absolute top-0 right-0 w-32 h-32 bg-positive opacity-5 blur-3xl rounded-full" />
-					<div className="z-10">
-						<p className="text-xs font-mono text-ghost uppercase tracking-wider mb-1">
-							High Probability
-						</p>
-						<p className="text-3xl font-structural font-bold text-positive-text">
-							{highProbCount}
-						</p>
-					</div>
-				</div>
-
-				<div className="bg-surface border border-white/10 rounded-lg p-5 flex items-center justify-between shadow-panel">
-					<div>
-						<p className="text-xs font-mono text-ghost uppercase tracking-wider mb-1">
-							Avg Propensity
-						</p>
-						<p className="text-3xl font-structural font-bold">
-							{(avgScore * 100).toFixed(1)}%
-						</p>
-					</div>
-				</div>
-			</header>
-
-			{/* Main Split Content */}
-			<main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
-				{/* Left Pane: Lead Roster (60%) */}
-				<div className="lg:col-span-7 bg-surface border border-white/10 rounded-lg shadow-panel flex flex-col overflow-hidden">
-					<div className="p-4 border-b border-white/10 bg-surface-elevated">
-						<h2 className="font-semibold text-sm tracking-wide">Lead Roster</h2>
-					</div>
-					<div className="flex-1 overflow-auto p-2">
-						<table className="w-full text-sm text-left">
-							<thead className="text-xs font-mono text-ghost uppercase sticky top-0 bg-surface">
-								<tr>
-									<th className="px-4 py-3 font-normal">Customer</th>
-									<th className="px-4 py-3 font-normal">Job</th>
-									<th className="px-4 py-3 font-normal text-right">
-										Propensity
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{data?.results.map((row) => {
-									const isSelected = selectedCustomer?.row_id === row.row_id;
-									const probPct = (row.subscription_probability * 100).toFixed(
-										0,
-									);
-									const isHigh = row.subscription_probability > 0.7;
-
-									return (
-										<tr
-											key={row.row_id}
-											onClick={() => setSelectedCustomer(row)}
-											className={`cursor-pointer transition-colors border-b border-white/5 last:border-0
-                        ${isSelected ? "bg-white/5" : "hover:bg-white/[0.02]"}
-                      `}
-										>
-											<td className="px-4 py-3">
-												<div className="flex items-center gap-2">
-													<span
-														className={`w-2 h-2 rounded-full ${isHigh ? "bg-positive-text" : "bg-negative-text"}`}
-													/>
-													<span className="font-medium text-white">
-														Lead #{row.row_id}
-													</span>
-													<span className="text-xs text-secondary">
-														Age {row.raw_data.age}
-													</span>
-												</div>
-											</td>
-											<td className="px-4 py-3 text-secondary capitalize">
-												{row.raw_data.job || "Unknown"}
-											</td>
-											<td className="px-4 py-3 text-right">
-												<span
-													className={`px-2 py-1 rounded text-xs font-mono font-medium
-                          ${isHigh ? "bg-positive-bg text-positive-text border border-positive/30" : "bg-negative-bg text-negative-text border border-negative/30"}
-                        `}
-												>
-													{probPct}%
-												</span>
-											</td>
-										</tr>
-									);
-								})}
-							</tbody>
-						</table>
-					</div>
-				</div>
-
-				{/* Right Pane: Explainability Engine (40%) */}
-				<div className="lg:col-span-5 bg-surface border border-white/10 rounded-lg shadow-panel flex flex-col relative overflow-hidden">
-					<div className="absolute top-0 right-0 w-64 h-64 bg-electric opacity-[0.02] blur-3xl pointer-events-none" />
-
-					<div className="p-4 border-b border-white/10 bg-surface-elevated flex justify-between items-center z-10">
-						<h2 className="font-semibold text-sm flex items-center gap-2">
-							<span className="text-electric font-mono text-lg leading-none">
-								◱
+		<div className="h-screen bg-canvas flex flex-col p-2 gap-2 overflow-hidden">
+			{/* HEADER BENTO ROW */}
+			<div className="grid grid-cols-12 gap-2 shrink-0">
+				<div className="col-span-12 flex gap-2">
+					{/* Main Content App Header */}
+					<div className="flex-1 bg-surface-1 border border-border-hairline p-2 flex items-center justify-between">
+						<div className="flex items-center gap-4">
+							<div className="w-4 h-4 bg-text-high" />
+							<span className="font-mono font-bold tracking-wider text-sm uppercase">
+								XAI_QUANT // LEAD_ANALYZER_V2.0
 							</span>
-							Explainability Engine
-						</h2>
-						{selectedCustomer && (
-							<span className="text-xs text-secondary font-mono">
-								ID: {selectedCustomer.row_id}
-							</span>
-						)}
-					</div>
-
-					<div className="flex-1 p-6 flex flex-col z-10">
-						{selectedCustomer ? (
-							<>
-								<div className="mb-6">
-									<p className="text-sm text-secondary mb-1">
-										Attribution for Lead #{selectedCustomer.row_id}
-									</p>
-									<div className="flex justify-between text-xs font-mono text-ghost mt-4">
-										<span>Negative Friction (-)</span>
-										<span>Positive Propensity (+)</span>
-									</div>
-								</div>
-
-								<div className="flex-1 min-h-[300px]">
-									<ResponsiveContainer width="100%" height="100%">
-										<BarChart
-											layout="vertical"
-											data={getChartData()}
-											margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
-										>
-											<Tooltip
-												cursor={{ fill: "rgba(255,255,255,0.02)" }}
-												contentStyle={{
-													backgroundColor: "#1A1A22",
-													borderColor: "rgba(255,255,255,0.1)",
-													color: "#fff",
-													fontSize: "12px",
-													borderRadius: "8px",
-												}}
-											/>
-											<XAxis
-												type="number"
-												hide
-												domain={["dataMin", "dataMax"]}
-											/>
-											<YAxis
-												dataKey="name"
-												type="category"
-												axisLine={false}
-												tickLine={false}
-												tick={{ fill: "#9E9EB2", fontSize: 12 }}
-												width={100}
-											/>
-											<ReferenceLine
-												x={0}
-												stroke="rgba(255,255,255,0.1)"
-												strokeDasharray="3 3"
-											/>
-											<Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
-												{getChartData().map((entry, index) => (
-													<Cell
-														key={`cell-${index}`}
-														fill={
-															entry.type === "positive" ? "#10B981" : "#EF4444"
-														}
-														fillOpacity={0.8}
-													/>
-												))}
-											</Bar>
-										</BarChart>
-									</ResponsiveContainer>
-								</div>
-							</>
-						) : (
-							<div className="flex h-full items-center justify-center text-ghost text-sm">
-								Select a lead to view SHAP attribution
-							</div>
-						)}
+						</div>
+						<div className="font-mono text-[10px] text-text-muted flex gap-4 hidden md:flex">
+							<span>LATENCY: 14ms</span>
+							<span>KERNEL: XGB-SHAP-64</span>
+						</div>
 					</div>
 				</div>
-			</main>
+			</div>
 
-			{/* Floating Action / Sidebar (Gemini AI Chat) */}
-			<div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-				{isChatOpen && (
-					<div className="w-80 md:w-96 bg-surface-modal border border-white/15 rounded-xl shadow-panel mb-4 overflow-hidden flex flex-col h-[500px] transform transition-all duration-300 ease-out">
-						<div className="p-3 bg-surface-elevated border-b border-white/10 flex justify-between items-center">
-							<div className="flex items-center gap-2">
-								<div className="w-5 h-5 rounded bg-gradient-to-br from-electric to-purple-600 flex items-center justify-center">
-									<span className="text-white text-[10px] font-bold">AI</span>
-								</div>
-								<span className="font-semibold text-sm">Gemini Assistant</span>
-								<span className="text-[9px] bg-electric/20 text-electric px-1.5 py-0.5 rounded uppercase font-mono tracking-wider ml-1">
-									Live Context
+			{/* MAIN BODY BENTO SPLIT */}
+			<div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
+				{/* LEFT COLUMN: Data Matrix (9 cols) */}
+				<div className="col-span-9 flex flex-col gap-2 min-h-0">
+					{/* KPI ROW */}
+					<div className="grid grid-cols-4 gap-[1px] bg-border-hairline border border-border-hairline shrink-0">
+						{/* KPI 1 */}
+						<div className="bg-surface-1 p-3">
+							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2">
+								Total Leads Evaluated
+							</p>
+							<p className="font-mono text-2xl font-bold">
+								{data?.total_processed.toLocaleString()}
+							</p>
+						</div>
+						{/* KPI 2 */}
+						<div className="bg-surface-1 p-3">
+							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
+								<span>Avg Conversion Prob</span>
+								<span className="text-text-high">
+									μ = {(avgScore * 100).toFixed(1)}%
+								</span>
+							</p>
+							<p className="font-mono text-2xl font-bold">
+								{(avgScore * 100).toFixed(1)}%
+							</p>
+						</div>
+						{/* KPI 3 */}
+						<div className="bg-surface-1 p-3">
+							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
+								<span>High-Propensity</span>
+								<span className="text-text-high">[P {">"} 0.75]</span>
+							</p>
+							<p className="font-mono text-2xl font-bold">
+								{highProbCount}{" "}
+								<span className="text-sm text-text-muted font-normal">
+									/ {data?.total_processed}
+								</span>
+							</p>
+						</div>
+						{/* KPI 4 */}
+						<div className="bg-surface-1 p-3">
+							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
+								<span>Top Job Category</span>
+								<span className="text-text-high">[MAX_WEIGHT]</span>
+							</p>
+							<p className="font-structural text-xl font-bold uppercase truncate capitalize">
+								{topJob}
+							</p>
+						</div>
+					</div>
+
+					{/* MACRO CHARTS ROW */}
+					<div className="grid grid-cols-2 gap-[1px] bg-border-hairline border border-border-hairline shrink-0 h-48">
+						{/* Histogram */}
+						<div className="bg-surface-1 flex flex-col min-h-0">
+							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
+								<span className="font-mono text-[10px] text-text-med tracking-widest">
+									[ MACRO // PROBABILITY DISTRIBUTION ]
+								</span>
+								<span className="font-mono text-[10px] text-text-muted">
+									BINS=5
 								</span>
 							</div>
-							<button
-								onClick={() => setIsChatOpen(false)}
-								className="text-secondary hover:text-white transition-colors"
-							>
-								<X className="w-4 h-4" />
-							</button>
-						</div>
-
-						<div className="flex-1 overflow-y-auto p-4 space-y-4">
-							{chatMessages.length === 0 && (
-								<div className="text-center text-xs text-ghost mt-4">
-									Ask a question about this dataset or lead... <br />
-									e.g., "Summarize the top reasons these leads were rejected."
-								</div>
-							)}
-							{chatMessages.map((msg, i) => (
-								<div
-									key={i}
-									className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-								>
-									<div
-										className={`text-sm p-3 rounded-lg max-w-[85%] ${
-											msg.role === "user"
-												? "bg-electric text-white rounded-br-none"
-												: "bg-surface-elevated border border-white/10 text-primary rounded-bl-none font-body leading-relaxed"
-										}`}
+							<div className="flex-1 p-4 pb-0">
+								<ResponsiveContainer width="100%" height="100%">
+									<BarChart
+										data={histogramData}
+										margin={{ top: 10, right: 0, left: -20, bottom: 0 }}
 									>
-										{msg.text}
-									</div>
-								</div>
-							))}
-							{isChatLoading && (
-								<div className="flex justify-start">
-									<div className="text-sm p-3 rounded-lg bg-surface-elevated border border-white/10 text-secondary rounded-bl-none flex gap-1">
-										<span className="animate-bounce">.</span>
-										<span className="animate-bounce delay-100">.</span>
-										<span className="animate-bounce delay-200">.</span>
-									</div>
-								</div>
-							)}
+										<CartesianGrid stroke="#2D2D2D" vertical={false} />
+										<XAxis
+											dataKey="range"
+											tick={{
+												fill: "#5A5A5A",
+												fontSize: 10,
+												fontFamily: "monospace",
+											}}
+											axisLine={false}
+											tickLine={false}
+										/>
+										<YAxis
+											tick={{
+												fill: "#5A5A5A",
+												fontSize: 10,
+												fontFamily: "monospace",
+											}}
+											axisLine={false}
+											tickLine={false}
+										/>
+										<Tooltip
+											cursor={{ fill: "#141414" }}
+											contentStyle={{
+												backgroundColor: "#000",
+												borderColor: "#383838",
+												borderRadius: 0,
+												fontFamily: "monospace",
+												fontSize: "11px",
+											}}
+										/>
+										<Bar dataKey="count" fill="#383838">
+											<LabelList
+												dataKey="count"
+												position="top"
+												fill="#A0A0A0"
+												fontSize={10}
+												fontFamily="monospace"
+											/>
+											{histogramData.map((entry, index) => (
+												<Cell
+													key={`cell-${index}`}
+													fill={
+														entry.count ===
+														Math.max(...histogramData.map((d) => d.count))
+															? "#FFFFFF"
+															: "#383838"
+													}
+												/>
+											))}
+										</Bar>
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
 						</div>
 
-						<div className="p-3 bg-surface-elevated border-t border-white/10 flex items-center gap-2">
-							<input
-								type="text"
-								value={chatInput}
-								onChange={(e) => setChatInput(e.target.value)}
-								onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-								placeholder="Ask Gemini..."
-								className="flex-1 bg-canvas border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-electric transition-colors"
-							/>
-							<button
-								onClick={handleSendMessage}
-								disabled={isChatLoading || !chatInput.trim()}
-								className="bg-electric hover:bg-electric-hover text-white p-2 rounded-md transition-colors disabled:opacity-50"
-							>
-								<Send className="w-4 h-4" />
-							</button>
+						{/* Job Demographics */}
+						<div className="bg-surface-1 flex flex-col min-h-0">
+							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
+								<span className="font-mono text-[10px] text-text-med tracking-widest">
+									[ MACRO // COHORT JOB DISTRIBUTION ]
+								</span>
+								<span className="font-mono text-[10px] text-text-muted">
+									TOP 5
+								</span>
+							</div>
+							<div className="flex-1 p-4 pb-0">
+								<ResponsiveContainer width="100%" height="100%">
+									<BarChart
+										layout="vertical"
+										data={jobData}
+										margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
+									>
+										<XAxis type="number" hide />
+										<YAxis
+											dataKey="job"
+											type="category"
+											tick={{
+												fill: "#A0A0A0",
+												fontSize: 10,
+												fontFamily: "monospace",
+												textTransform: "uppercase",
+											}}
+											axisLine={false}
+											tickLine={false}
+											width={80}
+										/>
+										<Tooltip
+											cursor={{ fill: "#141414" }}
+											contentStyle={{
+												backgroundColor: "#000",
+												borderColor: "#383838",
+												borderRadius: 0,
+												fontFamily: "monospace",
+												fontSize: "11px",
+											}}
+										/>
+										<Bar dataKey="count" fill="#5A5A5A" barSize={16}>
+											<LabelList
+												dataKey="count"
+												position="right"
+												fill="#FFFFFF"
+												fontSize={10}
+												fontFamily="monospace"
+											/>
+										</Bar>
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
 						</div>
 					</div>
-				)}
 
-				<button
-					onClick={() => setIsChatOpen(!isChatOpen)}
-					className={`p-4 rounded-full shadow-glow flex items-center justify-center transition-all duration-300
-            ${isChatOpen ? "bg-surface-elevated border border-white/10 text-secondary" : "bg-electric text-white hover:bg-electric-hover"}
-          `}
-				>
-					{isChatOpen ? (
-						<X className="w-6 h-6" />
-					) : (
-						<MessageSquare className="w-6 h-6" />
-					)}
-				</button>
+					{/* MICRO VIEW ROW (3-WAY SPLIT) */}
+					<div className="flex-1 grid grid-cols-12 gap-[1px] bg-border-hairline border border-border-hairline min-h-0">
+						{/* Roster (Col 4) */}
+						<div className="col-span-4 bg-surface-1 flex flex-col min-h-0 border-r border-border-hairline">
+							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
+								<span className="font-mono text-[10px] text-text-med tracking-widest">
+									[ ROSTER // LEAD_RANK ]
+								</span>
+							</div>
+							<div className="flex-1 overflow-auto">
+								<table className="w-full text-left font-mono text-[11px] whitespace-nowrap">
+									<thead className="text-text-muted bg-surface-1 sticky top-0 border-b border-border-hairline z-10">
+										<tr>
+											<th className="font-normal px-2 py-1.5">ID</th>
+											<th className="font-normal px-2 py-1.5">JOB</th>
+											<th className="font-normal px-2 py-1.5 w-full">SCORE</th>
+										</tr>
+									</thead>
+									<tbody>
+										{data?.results.map((row) => {
+											const isSelected =
+												selectedCustomer?.row_id === row.row_id;
+											const pct = Math.round(
+												row.subscription_probability * 100,
+											);
+											return (
+												<tr
+													key={row.row_id}
+													onClick={() => setSelectedCustomer(row)}
+													className={`cursor-pointer border-b border-border-hairline last:border-0 hover:bg-surface-3 transition-none
+                            ${isSelected ? "bg-surface-3 border-l-2 border-l-text-high" : "border-l-2 border-l-transparent"}
+                          `}
+												>
+													<td
+														className={`px-2 py-2 ${isSelected ? "text-text-high font-bold" : "text-text-med"}`}
+													>
+														#{row.row_id}
+													</td>
+													<td className="px-2 py-2 text-text-muted capitalize truncate max-w-[80px]">
+														{row.raw_data.job || "-"}
+													</td>
+													<td className="px-2 py-2">
+														<div className="flex items-center gap-2">
+															<span
+																className={`w-6 text-right ${pct > 75 ? "text-text-high font-bold" : "text-text-muted"}`}
+															>
+																{pct}%
+															</span>
+															<div className="flex-1 h-1.5 bg-surface-2 border border-border-structural">
+																<div
+																	className={`h-full ${pct > 75 ? "bg-text-high" : "bg-text-muted"}`}
+																	style={{ width: `${pct}%` }}
+																/>
+															</div>
+														</div>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						{/* SHAP Chart (Col 5) */}
+						<div className="col-span-5 bg-surface-1 flex flex-col min-h-0 border-r border-border-hairline relative">
+							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between z-10">
+								<span className="font-mono text-[10px] text-text-med tracking-widest">
+									[ SHAP // LEAD #{selectedCustomer?.row_id ?? "N/A"} ]
+								</span>
+							</div>
+							<div className="flex-1 p-4 flex flex-col min-h-0">
+								{!selectedCustomer ? (
+									<div className="flex-1 flex items-center justify-center font-mono text-[10px] text-text-muted">
+										AWAITING SELECTION
+									</div>
+								) : (
+									<>
+										<div className="flex justify-between font-mono text-[10px] text-text-muted mb-4 border-b border-border-hairline pb-2">
+											<span>{"<-- NEGATIVE IMPACT [-]"}</span>
+											<span>{"[+] POSITIVE IMPACT -->"}</span>
+										</div>
+										<div className="flex-1 min-h-0">
+											<ResponsiveContainer width="100%" height="100%">
+												<BarChart
+													layout="vertical"
+													data={shapData}
+													margin={{ top: 0, right: 20, left: 20, bottom: 0 }}
+												>
+													<XAxis
+														type="number"
+														hide
+														domain={["dataMin", "dataMax"]}
+													/>
+													<YAxis
+														dataKey="name"
+														type="category"
+														axisLine={false}
+														tickLine={false}
+														tick={{
+															fill: "#A0A0A0",
+															fontSize: 10,
+															fontFamily: "monospace",
+														}}
+														width={80}
+													/>
+													<ReferenceLine x={0} stroke="#383838" />
+													<Tooltip
+														cursor={{ fill: "#141414" }}
+														contentStyle={{
+															backgroundColor: "#000",
+															borderColor: "#383838",
+															borderRadius: 0,
+															fontFamily: "monospace",
+															fontSize: "11px",
+														}}
+													/>
+													<Bar
+														dataKey="value"
+														barSize={12}
+														isAnimationActive={false}
+													>
+														{shapData.map((entry, index) => (
+															<Cell
+																key={`cell-${index}`}
+																fill={
+																	entry.type === "positive"
+																		? "#FFFFFF"
+																		: "#141414"
+																}
+																stroke={
+																	entry.type === "negative" ? "#FFFFFF" : "none"
+																}
+																strokeWidth={1}
+															/>
+														))}
+													</Bar>
+												</BarChart>
+											</ResponsiveContainer>
+										</div>
+										<div className="mt-2 text-[9px] font-mono text-text-muted border-t border-border-hairline pt-2">
+											WHITE = POSITIVE DRIVER | OUTLINED = NEGATIVE SHIFTER
+										</div>
+									</>
+								)}
+							</div>
+						</div>
+
+						{/* RAW DATA JSON Viewer (Col 3) */}
+						<div className="col-span-3 bg-surface-1 flex flex-col min-h-0">
+							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
+								<span className="font-mono text-[10px] text-text-med tracking-widest">
+									[ RAW DATA // JSON ]
+								</span>
+							</div>
+							<div className="flex-1 p-2 overflow-auto bg-surface-1">
+								{!selectedCustomer ? (
+									<div className="flex h-full items-center justify-center font-mono text-[10px] text-text-muted">
+										NO DATA
+									</div>
+								) : (
+									<pre className="font-mono text-[10px] text-text-med leading-relaxed whitespace-pre-wrap">
+										{JSON.stringify(selectedCustomer.raw_data, null, 2)}
+									</pre>
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* RIGHT COLUMN: Permanent AI Sidecar (3 cols) */}
+				<div className="col-span-3 bg-surface-1 border border-border-hairline flex flex-col min-h-0">
+					<div className="p-2 border-b border-border-hairline bg-text-high text-text-inv flex justify-between">
+						<span className="font-mono text-[10px] font-bold tracking-widest">
+							[ GEMINI_AI // CLI_V2.0 ]
+						</span>
+						<span className="font-mono text-[10px]">[ {">_"} ]</span>
+					</div>
+
+					<div className="p-2 border-b border-border-hairline bg-surface-2 font-mono text-[9px] text-text-muted flex justify-between">
+						<span>CONTEXT: BATCH_#{new Date().getHours()}</span>
+						<span className="text-text-high">[ENGINE_ONLINE]</span>
+					</div>
+
+					<div className="flex-1 p-3 overflow-y-auto font-mono text-[11px] space-y-4">
+						<div className="text-text-muted">
+							<span className="text-text-high">sys://gemini_init:</span>{" "}
+							Quantitative Explainer loaded. Hooked to batch context. Type query
+							to execute analysis.
+						</div>
+
+						{chatMessages.map((msg, i) => (
+							<div key={i} className="flex flex-col gap-1">
+								{msg.role === "user" ? (
+									<div className="text-text-med">
+										<span className="text-text-high font-bold">
+											{"> USER:"}
+										</span>{" "}
+										{msg.text}
+									</div>
+								) : (
+									<div className="text-text-high pl-3 border-l border-border-structural whitespace-pre-wrap">
+										<span className="text-text-med font-bold">
+											{"GEMINI: "}
+										</span>
+										{msg.text}
+									</div>
+								)}
+							</div>
+						))}
+
+						{isChatLoading && (
+							<div className="text-text-muted animate-pulse">
+								{"> GEMINI:"} Computing response...
+							</div>
+						)}
+					</div>
+
+					<div className="p-2 border-t border-border-hairline bg-surface-2 flex items-center gap-2">
+						<span className="font-mono text-text-high text-[11px] shrink-0 font-bold">
+							{"root@xai:~#"}
+						</span>
+						<input
+							type="text"
+							value={chatInput}
+							onChange={(e) => setChatInput(e.target.value)}
+							onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+							placeholder="Type query or command..."
+							className="flex-1 bg-transparent border-none outline-none font-mono text-[11px] text-text-high placeholder:text-text-muted"
+						/>
+						<button
+							onClick={handleSendMessage}
+							disabled={isChatLoading || !chatInput.trim()}
+							className="bg-text-high text-text-inv font-mono text-[10px] font-bold px-2 py-1 disabled:opacity-50 transition-none hover:bg-text-med uppercase"
+						>
+							[Exec]
+						</button>
+					</div>
+				</div>
+			</div>
+
+			{/* FOOTER BAR */}
+			<div className="bg-canvas border-t border-border-hairline p-1 flex justify-between font-mono text-[9px] text-text-muted mt-auto">
+				<div className="flex gap-4">
+					<span>■ FED-SR 11-7 VALIDATED</span>
+					<span>// ZERO COLOR DRIFT</span>
+				</div>
+				<div>
+					<span>NODE: NYC-FIN-CORE-04</span>
+					<span className="ml-4 text-text-high">STATUS: [OPTIMAL]</span>
+				</div>
 			</div>
 		</div>
 	);

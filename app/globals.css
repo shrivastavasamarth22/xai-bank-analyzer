@@ -2,56 +2,50 @@
 @import "tailwindcss";
 
 @theme {
-	/* Colors - Foundational & Neutrals */
-	--color-canvas: #0a0a0a;
-	--color-surface: #141419;
-	--color-surface-elevated: #1a1a22;
-	--color-surface-modal: #23232f;
+  /* Canvas & Surfaces */
+  --color-canvas: #000000;
+  --color-surface-1: #0D0D0D;
+  --color-surface-2: #141414;
+  --color-surface-3: #1E1E1E;
+  
+  /* Structural Borders */
+  --color-border-hairline: #2D2D2D;
+  --color-border-structural: #383838;
+  --color-border-active: #FFFFFF;
+  
+  /* Typographic Contrast */
+  --color-text-high: #FFFFFF;
+  --color-text-med: #A0A0A0;
+  --color-text-muted: #5A5A5A;
+  --color-text-inv: #000000;
 
-	--color-primary: #ffffff;
-	--color-secondary: #9e9eb2;
-	--color-ghost: #62627a;
-
-	/* Colors - Semantic Telemetry */
-	--color-electric: #3b82f6;
-	--color-electric-hover: #60a5fa;
-
-	--color-positive: #10b981;
-	--color-positive-text: #34d399;
-	--color-positive-bg: rgba(16, 185, 129, 0.12);
-
-	--color-negative: #ef4444;
-	--color-negative-text: #f87171;
-	--color-negative-bg: rgba(239, 68, 68, 0.12);
-
-	/* Typography mapping to next/font CSS variables */
-	--font-structural: var(--font-geist), sans-serif;
-	--font-body: var(--font-jakarta), sans-serif;
-	--font-mono: var(--font-jetbrains), monospace;
-
-	/* Custom Elevation & Radiance */
-	--shadow-glow: 0 0 16px rgba(59, 130, 246, 0.35);
-	--shadow-panel: 0 16px 32px -8px rgba(0, 0, 0, 0.65);
+  /* Typography */
+  --font-structural: var(--font-geist), sans-serif;
+  --font-mono: var(--font-jetbrains), monospace;
 }
 
-/* Base resets & dark mode essentials */
 @layer base {
-	body {
-		@apply bg-canvas text-primary font-body antialiased selection:bg-electric selection:text-white;
-	}
+  body {
+    @apply bg-canvas text-text-high font-structural antialiased;
+    /* Force tabular numerals for all data to prevent jitter */
+    font-variant-numeric: tabular-nums lining-nums;
+  }
 
-	/* Custom scrollbar for data tables and chat */
-	::-webkit-scrollbar {
-		width: 6px;
-		height: 6px;
-	}
-	::-webkit-scrollbar-track {
-		background: transparent;
-	}
-	::-webkit-scrollbar-thumb {
-		@apply bg-white/10 rounded-full;
-	}
-	::-webkit-scrollbar-thumb:hover {
-		@apply bg-white/20;
-	}
+  /* Hard, brutalist scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-canvas border-l border-border-hairline;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border-structural rounded-none;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-med;
+  }
+  ::-webkit-scrollbar-corner {
+    @apply bg-canvas;
+  }
 }
