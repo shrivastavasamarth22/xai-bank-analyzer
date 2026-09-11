@@ -12,10 +12,17 @@ import {
 	ResponsiveContainer,
 	Cell,
 	ReferenceLine,
-	CartesianGrid,
-	LabelList,
 } from "recharts";
-import { Upload, Terminal, PlaySquare, XSquare } from "lucide-react";
+import {
+	CloudUpload,
+	Loader2,
+	AlertCircle,
+	Briefcase,
+	Target,
+	TrendingUp,
+	Users,
+	ArrowUpRight,
+} from "lucide-react";
 
 // --- Types ---
 type Driver = { feature: string; impact: number };
@@ -29,7 +36,7 @@ type CustomerResult = {
 type BackendData = { total_processed: number; results: CustomerResult[] };
 type UploadState = "idle" | "loading" | "waking-server" | "success" | "error";
 
-export default function XAIBankAnalyzerV2() {
+export default function EnterpriseXAIDashboard() {
 	// --- State ---
 	const [uploadState, setUploadState] = useState<UploadState>("idle");
 	const [data, setData] = useState<BackendData | null>(null);
@@ -109,7 +116,10 @@ export default function XAIBankAnalyzerV2() {
 		} catch (e) {
 			setChatMessages((prev) => [
 				...prev,
-				{ role: "ai", text: "[ERR] CONNECTION_REFUSED" },
+				{
+					role: "ai",
+					text: "Service temporarily unavailable. Please try again.",
+				},
 			]);
 		} finally {
 			setIsChatLoading(false);
@@ -117,11 +127,9 @@ export default function XAIBankAnalyzerV2() {
 	};
 
 	// --- Derived Analytics for Recharts ---
-
-	// 1. Histogram (Probability Distribution)
 	const histogramData = useMemo(() => {
 		if (!data) return [];
-		const bins = [0, 0, 0, 0, 0]; // 0-20, 20-40, 40-60, 60-80, 80-100
+		const bins = [0, 0, 0, 0, 0];
 		data.results.forEach((r) => {
 			const prob = r.subscription_probability;
 			if (prob < 0.2) bins[0]++;
@@ -131,32 +139,30 @@ export default function XAIBankAnalyzerV2() {
 			else bins[4]++;
 		});
 		return [
-			{ range: "0-20", count: bins[0] },
-			{ range: "20-40", count: bins[1] },
-			{ range: "40-60", count: bins[2] },
-			{ range: "60-80", count: bins[3] },
-			{ range: "80-100", count: bins[4] },
+			{ range: "0–20%", count: bins[0] },
+			{ range: "20–40%", count: bins[1] },
+			{ range: "40–60%", count: bins[2] },
+			{ range: "60–80%", count: bins[3] },
+			{ range: "80–100%", count: bins[4] },
 		];
 	}, [data]);
 
-	// 2. Job Demographics
 	const jobData = useMemo(() => {
 		if (!data) return [];
 		const counts: Record<string, number> = {};
 		data.results.forEach((r) => {
-			const job = r.raw_data.job || "unknown";
+			const job = r.raw_data.job || "Unknown";
 			counts[job] = (counts[job] || 0) + 1;
 		});
-		return (
-			Object.entries(counts)
-				// FIX: Uppercase the string directly here in the data array
-				.map(([job, count]) => ({ job: job.toUpperCase(), count }))
-				.sort((a, b) => b.count - a.count)
-				.slice(0, 5)
-		); // Top 5
+		return Object.entries(counts)
+			.map(([job, count]) => ({
+				job: job.charAt(0).toUpperCase() + job.slice(1).toLowerCase(),
+				count,
+			}))
+			.sort((a, b) => b.count - a.count)
+			.slice(0, 5);
 	}, [data]);
 
-	// 3. SHAP Chart Data for Selected Customer
 	const shapData = useMemo(() => {
 		if (!selectedCustomer) return [];
 		const { positive, negative } = selectedCustomer.drivers;
@@ -185,7 +191,7 @@ export default function XAIBankAnalyzerV2() {
 	const topJob = jobData.length > 0 ? jobData[0].job : "N/A";
 
 	// ==========================================
-	// VIEW 1: TERMINAL INGESTION SCREEN
+	// VIEW 1: ENTERPRISE SECURE UPLOAD
 	// ==========================================
 	if (
 		uploadState === "idle" ||
@@ -194,125 +200,88 @@ export default function XAIBankAnalyzerV2() {
 		uploadState === "error"
 	) {
 		return (
-			<div className="min-h-screen bg-canvas p-6 flex flex-col justify-center items-center">
-				<div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-					{/* Left: Branding & Upload */}
-					<div className="space-y-8">
-						<div>
-							<p className="font-mono text-text-med text-xs mb-4 flex items-center gap-2 tracking-widest">
-								<span className="w-2 h-2 bg-text-high block"></span>[ MODULE 01
-								// DATA INGESTION PIPELINE ]
-							</p>
-							<h1 className="text-4xl md:text-5xl font-semibold tracking-tighter uppercase leading-[0.9]">
-								Predict Subscriptions.
-								<br />
-								<span className="text-text-med">Explain Mechanics.</span>
-							</h1>
-							<p className="font-mono text-text-muted text-xs mt-6 leading-relaxed max-w-md">
-								High-throughput probabilistic scoring engine powered by XGBoost
-								and additive SHAP feature attribution. Zero color drift.
-							</p>
+			<div className="min-h-screen bg-canvas p-6 flex flex-col justify-center items-center font-sans">
+				<div className="max-w-2xl w-full flex flex-col items-center text-center space-y-8">
+					<div className="space-y-4">
+						<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-text-secondary">
+							<span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+							Sovereign Intelligence
 						</div>
-
-						<div
-							{...getRootProps()}
-							className={`p-10 border border-dashed transition-none cursor-pointer flex flex-col items-center text-center
-                ${isDragActive ? "border-text-high bg-surface-2" : "border-border-structural bg-surface-1 hover:border-text-med"}
-                ${uploadState === "error" ? "border-text-high bg-text-high text-text-inv" : ""}
-              `}
-						>
-							<input {...getInputProps()} />
-
-							{uploadState === "idle" && (
-								<>
-									<Upload className="w-6 h-6 mb-4" />
-									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
-										DRAG & DROP BATCH DATASET
-									</p>
-									<p className="font-mono text-xs text-text-muted mt-2">
-										[ CSV, XLSX, PARQUET ]
-									</p>
-								</>
-							)}
-
-							{uploadState === "loading" && (
-								<>
-									<Terminal className="w-6 h-6 mb-4 animate-pulse" />
-									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
-										ANALYZING DATASTREAM...
-									</p>
-									<p className="font-mono text-xs text-text-muted mt-2">
-										[ EXECUTING XGB_KERNEL ]
-									</p>
-								</>
-							)}
-
-							{uploadState === "waking-server" && (
-								<>
-									<Terminal className="w-6 h-6 mb-4 animate-bounce" />
-									<p className="font-mono text-sm tracking-widest font-semibold uppercase">
-										WAKING UP AI ENGINE
-									</p>
-									<p className="font-mono text-xs text-text-muted mt-2">
-										[WARN] COLD START DETECTED. ETA: 45s
-									</p>
-								</>
-							)}
-
-							{uploadState === "error" && (
-								<>
-									<XSquare className="w-6 h-6 mb-4" />
-									<p className="font-mono text-sm tracking-widest font-bold uppercase">
-										INGESTION FAILED
-									</p>
-									<p className="font-mono text-xs mt-2">
-										[ERR] KERNEL_OFFLINE OR SCHEMA_MISMATCH
-									</p>
-								</>
-							)}
-						</div>
+						<h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-text-primary">
+							Term Deposit Propensity
+						</h1>
+						<p className="text-text-secondary text-sm md:text-base max-w-lg mx-auto leading-relaxed">
+							Automated high-precision scoring for retail banking cohorts.
+							Ingest historical customer engagement records to unlock
+							explainable tree-attribution drivers.
+						</p>
 					</div>
 
-					{/* Right: Mock Terminal Status */}
-					<div className="bg-surface-1 border border-border-structural p-1">
-						<div className="bg-surface-2 border-b border-border-hairline p-2 flex justify-between">
-							<span className="font-mono text-[10px] text-text-med tracking-widest">
-								[ SYSTEM_STATUS // ENGINE_TELEMETRY ]
-							</span>
-							<span className="font-mono text-[10px] text-text-high tracking-widest">
-								LIVE_DIAGNOSTICS
-							</span>
-						</div>
-						<div className="p-4 font-mono text-[11px] space-y-3">
-							<div className="flex justify-between border-b border-border-hairline pb-2">
-								<span className="text-text-muted">Subsystem</span>
-								<span className="text-text-muted">State / Verdict</span>
-							</div>
-							<div className="flex justify-between">
-								<span>[ OK ] XGBoost Inference Kernel</span>
-								<span className="text-text-high">ONLINE (v4.2.0-quant)</span>
-							</div>
-							<div className="flex justify-between">
-								<span>[ OK ] TreeSHAP Attribution Matrix</span>
-								<span className="text-text-high">
-									LOADED (Exact Local/Global)
-								</span>
-							</div>
-							<div className="flex justify-between text-text-muted">
-								<span>[ OK ] In-Memory Vector Buffer</span>
-								<span>ALLOCATED (64 MB)</span>
-							</div>
-							<div className="flex justify-between text-text-muted">
-								<span>[ OK ] Cryptographic SHA-256 Hashing</span>
-								<span>ACTIVE</span>
-							</div>
-							<div className="flex justify-between mt-4">
-								<span className="animate-pulse">
-									[ ... ] Input Schema Verification
-								</span>
-								<span className="text-text-high">AWAITING STREAM</span>
-							</div>
-						</div>
+					<div
+						{...getRootProps()}
+						className={`w-full p-12 rounded-3xl border border-dashed transition-all duration-300 flex flex-col items-center justify-center cursor-pointer
+              ${isDragActive ? "border-white bg-surface-2" : "border-white/15 bg-surface-1 hover:border-white/30 hover:bg-surface-2"}
+              ${uploadState === "error" ? "border-red-900/50 bg-red-950/10" : ""}
+            `}
+					>
+						<input {...getInputProps()} />
+
+						{uploadState === "idle" && (
+							<>
+								<div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6">
+									<CloudUpload className="w-8 h-8 text-text-secondary" />
+								</div>
+								<h3 className="text-lg font-medium text-text-primary mb-2">
+									Upload Customer Cohort
+								</h3>
+								<p className="text-sm text-text-tertiary">
+									Drag & drop CSV, Parquet, or XLSX (Max 500MB)
+								</p>
+								<div className="mt-8 flex items-center gap-2 text-xs text-text-tertiary">
+									<span className="flex items-center justify-center w-4 h-4 rounded-full border border-white/10">
+										🔒
+									</span>
+									Encrypted in-transit via SHA-256
+								</div>
+							</>
+						)}
+
+						{uploadState === "loading" && (
+							<>
+								<Loader2 className="w-10 h-10 text-white mb-6 animate-spin opacity-80" />
+								<h3 className="text-lg font-medium text-text-primary mb-2">
+									Ingesting Cohort Data
+								</h3>
+								<p className="text-sm text-text-tertiary">
+									Running automated statistical drift detection...
+								</p>
+							</>
+						)}
+
+						{uploadState === "waking-server" && (
+							<>
+								<Loader2 className="w-10 h-10 text-text-secondary mb-6 animate-spin opacity-50" />
+								<h3 className="text-lg font-medium text-text-primary mb-2">
+									Initializing Inference Node
+								</h3>
+								<p className="text-sm text-text-tertiary">
+									Cold start detected. Establishing secure connection (ETA:
+									45s)...
+								</p>
+							</>
+						)}
+
+						{uploadState === "error" && (
+							<>
+								<AlertCircle className="w-10 h-10 text-text-secondary mb-6" />
+								<h3 className="text-lg font-medium text-text-primary mb-2">
+									Ingestion Interrupted
+								</h3>
+								<p className="text-sm text-text-tertiary">
+									Unable to validate schema or node offline. Please try again.
+								</p>
+							</>
+						)}
 					</div>
 				</div>
 			</div>
@@ -320,227 +289,97 @@ export default function XAIBankAnalyzerV2() {
 	}
 
 	// ==========================================
-	// VIEW 2: THE BENTO DASHBOARD
+	// VIEW 2: SOVEREIGN INTELLIGENCE DASHBOARD
 	// ==========================================
 	return (
-		<div className="h-screen bg-canvas flex flex-col p-2 gap-2 overflow-hidden">
-			{/* HEADER BENTO ROW */}
-			<div className="grid grid-cols-12 gap-2 shrink-0">
-				<div className="col-span-12 flex gap-2">
-					{/* Main Content App Header */}
-					<div className="flex-1 bg-surface-1 border border-border-hairline p-2 flex items-center justify-between">
-						<div className="flex items-center gap-4">
-							<div className="w-4 h-4 bg-text-high" />
-							<span className="font-mono font-bold tracking-wider text-sm uppercase">
-								XAI_QUANT // LEAD_ANALYZER_V2.0
-							</span>
-						</div>
-						<div className="font-mono text-[10px] text-text-muted flex gap-4 hidden md:flex">
-							<span>LATENCY: 14ms</span>
-							<span>KERNEL: XGB-SHAP-64</span>
-						</div>
+		<div className="h-screen bg-canvas flex flex-col p-4 gap-4 overflow-hidden font-sans">
+			{/* HEADER */}
+			<header className="shrink-0 flex items-center justify-between px-2">
+				<div className="flex items-center gap-3">
+					<div className="w-8 h-8 rounded-lg border border-white/20 flex items-center justify-center">
+						<SparklesIcon />
 					</div>
+					<h1 className="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
+						Sovereign Intelligence
+						<span className="text-text-tertiary text-sm font-normal">/</span>
+						<span className="text-text-secondary text-sm font-normal">
+							Explainable AI Hub
+						</span>
+					</h1>
 				</div>
-			</div>
+				<div className="flex items-center gap-4 text-xs font-medium text-text-secondary">
+					<span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5">
+						<div className="w-1.5 h-1.5 rounded-full bg-white" /> Node Online
+					</span>
+				</div>
+			</header>
 
-			{/* MAIN BODY BENTO SPLIT */}
-			<div className="flex-1 grid grid-cols-12 gap-2 min-h-0">
-				{/* LEFT COLUMN: Data Matrix (9 cols) */}
-				<div className="col-span-9 flex flex-col gap-2 min-h-0">
-					{/* KPI ROW */}
-					<div className="grid grid-cols-4 gap-[1px] bg-border-hairline border border-border-hairline shrink-0">
-						{/* KPI 1 */}
-						<div className="bg-surface-1 p-3">
-							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2">
-								Total Leads Evaluated
-							</p>
-							<p className="font-mono text-2xl font-bold">
-								{data?.total_processed.toLocaleString()}
-							</p>
-						</div>
-						{/* KPI 2 */}
-						<div className="bg-surface-1 p-3">
-							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
-								<span>Avg Conversion Prob</span>
-								<span className="text-text-high">
-									μ = {(avgScore * 100).toFixed(1)}%
-								</span>
-							</p>
-							<p className="font-mono text-2xl font-bold">
-								{(avgScore * 100).toFixed(1)}%
-							</p>
-						</div>
-						{/* KPI 3 */}
-						<div className="bg-surface-1 p-3">
-							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
-								<span>High-Propensity</span>
-								<span className="text-text-high">[P {">"} 0.75]</span>
-							</p>
-							<p className="font-mono text-2xl font-bold">
-								{highProbCount}{" "}
-								<span className="text-sm text-text-muted font-normal">
-									/ {data?.total_processed}
-								</span>
-							</p>
-						</div>
-						{/* KPI 4 */}
-						<div className="bg-surface-1 p-3">
-							<p className="font-mono text-[10px] text-text-med tracking-widest uppercase mb-2 flex justify-between">
-								<span>Top Job Category</span>
-								<span className="text-text-high">[MAX_WEIGHT]</span>
-							</p>
-							<p className="font-structural text-xl font-bold uppercase truncate capitalize">
-								{topJob}
-							</p>
-						</div>
+			{/* MAIN LAYOUT: 9 cols Data, 3 cols AI Chat */}
+			<div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
+				{/* LEFT PANE: ANALYTICS (9 Cols) */}
+				<div className="lg:col-span-9 flex flex-col gap-4 min-h-0">
+					{/* 1. KPI ROW (Top) */}
+					<div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
+						{[
+							{
+								label: "Total Processed",
+								value: data?.total_processed.toLocaleString(),
+								icon: Users,
+								sub: "100% data fidelity",
+							},
+							{
+								label: "Avg Conversion Score",
+								value: `${(avgScore * 100).toFixed(1)}%`,
+								icon: TrendingUp,
+								sub: "+4.8% vs benchmark",
+							},
+							{
+								label: "High-Propensity",
+								value: highProbCount.toLocaleString(),
+								icon: Target,
+								sub: `${((highProbCount / (data?.total_processed || 1)) * 100).toFixed(1)}% of cohort`,
+							},
+							{
+								label: "Top Demographic",
+								value: topJob,
+								icon: Briefcase,
+								sub: "Primary yield driver",
+							},
+						].map((kpi, i) => (
+							<div
+								key={i}
+								className="bg-surface-1 border border-border-subtle rounded-2xl p-5 flex flex-col justify-between"
+							>
+								<div className="flex items-center justify-between mb-4">
+									<span className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+										{kpi.label}
+									</span>
+									<kpi.icon className="w-4 h-4 text-text-secondary opacity-50" />
+								</div>
+								<div>
+									<div className="text-3xl font-semibold text-white tracking-tight mb-1">
+										{kpi.value}
+									</div>
+									<div className="text-xs text-text-tertiary">{kpi.sub}</div>
+								</div>
+							</div>
+						))}
 					</div>
 
-					{/* MACRO CHARTS ROW */}
-					<div className="grid grid-cols-2 gap-[1px] bg-border-hairline border border-border-hairline shrink-0 h-48">
-						{/* Histogram */}
-						<div className="bg-surface-1 flex flex-col min-h-0">
-							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
-								<span className="font-mono text-[10px] text-text-med tracking-widest">
-									[ MACRO // PROBABILITY DISTRIBUTION ]
-								</span>
-								<span className="font-mono text-[10px] text-text-muted">
-									BINS=5
-								</span>
-							</div>
-							<div className="flex-1 p-4 pb-0">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart
-										data={histogramData}
-										margin={{ top: 10, right: 0, left: -20, bottom: 0 }}
-									>
-										<CartesianGrid stroke="#2D2D2D" vertical={false} />
-										<XAxis
-											dataKey="range"
-											tick={{
-												fill: "#5A5A5A",
-												fontSize: 10,
-												fontFamily: "monospace",
-											}}
-											axisLine={false}
-											tickLine={false}
-										/>
-										<YAxis
-											tick={{
-												fill: "#5A5A5A",
-												fontSize: 10,
-												fontFamily: "monospace",
-											}}
-											axisLine={false}
-											tickLine={false}
-										/>
-										<Tooltip
-											cursor={{ fill: "#141414" }}
-											contentStyle={{
-												backgroundColor: "#000",
-												borderColor: "#383838",
-												borderRadius: 0,
-												fontFamily: "monospace",
-												fontSize: "11px",
-											}}
-										/>
-										<Bar dataKey="count" fill="#383838">
-											<LabelList
-												dataKey="count"
-												position="top"
-												fill="#A0A0A0"
-												fontSize={10}
-												fontFamily="monospace"
-											/>
-											{histogramData.map((entry, index) => (
-												<Cell
-													key={`cell-${index}`}
-													fill={
-														entry.count ===
-														Math.max(...histogramData.map((d) => d.count))
-															? "#FFFFFF"
-															: "#383838"
-													}
-												/>
-											))}
-										</Bar>
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-						</div>
-
-						{/* Job Demographics */}
-						<div className="bg-surface-1 flex flex-col min-h-0">
-							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
-								<span className="font-mono text-[10px] text-text-med tracking-widest">
-									[ MACRO // COHORT JOB DISTRIBUTION ]
-								</span>
-								<span className="font-mono text-[10px] text-text-muted">
-									TOP 5
-								</span>
-							</div>
-							<div className="flex-1 p-4 pb-0">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart
-										layout="vertical"
-										data={jobData}
-										margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
-									>
-										<XAxis type="number" hide />
-										<YAxis
-											dataKey="job"
-											type="category"
-											tick={{
-												fill: "#A0A0A0",
-												fontSize: 10,
-												fontFamily: "monospace",
-											}}
-											axisLine={false}
-											tickLine={false}
-											width={80}
-										/>
-										<Tooltip
-											cursor={{ fill: "#141414" }}
-											contentStyle={{
-												backgroundColor: "#000",
-												borderColor: "#383838",
-												borderRadius: 0,
-												fontFamily: "monospace",
-												fontSize: "11px",
-											}}
-										/>
-										<Bar dataKey="count" fill="#5A5A5A" barSize={16}>
-											<LabelList
-												dataKey="count"
-												position="right"
-												fill="#FFFFFF"
-												fontSize={10}
-												fontFamily="monospace"
-											/>
-										</Bar>
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-						</div>
-					</div>
-
-					{/* MICRO VIEW ROW (3-WAY SPLIT) */}
-					<div className="flex-1 grid grid-cols-12 gap-[1px] bg-border-hairline border border-border-hairline min-h-0">
-						{/* Roster (Col 4) */}
-						<div className="col-span-4 bg-surface-1 flex flex-col min-h-0 border-r border-border-hairline">
-							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
-								<span className="font-mono text-[10px] text-text-med tracking-widest">
-									[ ROSTER // LEAD_RANK ]
+					{/* 2. THE EXPLAINABILITY CORE (Middle Row - Dominant Focus) */}
+					<div className="flex-1 grid grid-cols-1 lg:grid-cols-9 gap-4 min-h-0">
+						{/* Lead Roster (3 Cols) */}
+						<div className="lg:col-span-3 bg-surface-1 border border-border-subtle rounded-2xl flex flex-col overflow-hidden">
+							<div className="p-4 border-b border-border-subtle shrink-0 flex justify-between items-center">
+								<h3 className="text-sm font-medium text-white">
+									Target Roster
+								</h3>
+								<span className="text-[10px] text-text-tertiary uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-full">
+									Select Lead
 								</span>
 							</div>
 							<div className="flex-1 overflow-auto">
-								<table className="w-full text-left font-mono text-[11px] whitespace-nowrap">
-									<thead className="text-text-muted bg-surface-1 sticky top-0 border-b border-border-hairline z-10">
-										<tr>
-											<th className="font-normal px-2 py-1.5">ID</th>
-											<th className="font-normal px-2 py-1.5">JOB</th>
-											<th className="font-normal px-2 py-1.5 w-full">SCORE</th>
-										</tr>
-									</thead>
+								<table className="w-full text-left text-sm whitespace-nowrap">
 									<tbody>
 										{data?.results.map((row) => {
 											const isSelected =
@@ -548,36 +387,37 @@ export default function XAIBankAnalyzerV2() {
 											const pct = Math.round(
 												row.subscription_probability * 100,
 											);
+											const isHigh = pct >= 75;
 											return (
 												<tr
 													key={row.row_id}
 													onClick={() => setSelectedCustomer(row)}
-													className={`cursor-pointer border-b border-border-hairline last:border-0 hover:bg-surface-3 transition-none
-                            ${isSelected ? "bg-surface-3 border-l-2 border-l-text-high" : "border-l-2 border-l-transparent"}
+													className={`cursor-pointer border-b border-border-subtle last:border-0 transition-colors
+                            ${isSelected ? "bg-white/5" : "hover:bg-white/[0.02]"}
                           `}
 												>
-													<td
-														className={`px-2 py-2 ${isSelected ? "text-text-high font-bold" : "text-text-med"}`}
-													>
-														#{row.row_id}
-													</td>
-													<td className="px-2 py-2 text-text-muted capitalize truncate max-w-[80px]">
-														{row.raw_data.job || "-"}
-													</td>
-													<td className="px-2 py-2">
-														<div className="flex items-center gap-2">
-															<span
-																className={`w-6 text-right ${pct > 75 ? "text-text-high font-bold" : "text-text-muted"}`}
-															>
-																{pct}%
-															</span>
-															<div className="flex-1 h-1.5 bg-surface-2 border border-border-structural">
-																<div
-																	className={`h-full ${pct > 75 ? "bg-text-high" : "bg-text-muted"}`}
-																	style={{ width: `${pct}%` }}
-																/>
-															</div>
+													<td className="px-4 py-3">
+														<div
+															className={`font-medium flex items-center gap-2 ${isSelected ? "text-white" : "text-text-secondary"}`}
+														>
+															Lead #{row.row_id}
 														</div>
+														<div className="text-xs text-text-tertiary capitalize mt-0.5">
+															{row.raw_data.job || "Unknown"}
+														</div>
+													</td>
+													<td className="px-4 py-3 text-right">
+														<span
+															className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium border
+                              ${
+																isHigh
+																	? "bg-white/10 text-white border-white/20"
+																	: "bg-transparent text-text-secondary border-border-subtle"
+															}
+                            `}
+														>
+															{pct}%
+														</span>
 													</td>
 												</tr>
 											);
@@ -587,30 +427,55 @@ export default function XAIBankAnalyzerV2() {
 							</div>
 						</div>
 
-						{/* SHAP Chart (Col 5) */}
-						<div className="col-span-5 bg-surface-1 flex flex-col min-h-0 border-r border-border-hairline relative">
-							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between z-10">
-								<span className="font-mono text-[10px] text-text-med tracking-widest">
-									[ SHAP // LEAD #{selectedCustomer?.row_id ?? "N/A"} ]
-								</span>
+						{/* Massive SHAP Engine (6 Cols) */}
+						<div className="lg:col-span-6 bg-surface-1 border border-border-subtle rounded-2xl flex flex-col overflow-hidden">
+							<div className="p-4 border-b border-border-subtle shrink-0 flex items-center justify-between">
+								<div>
+									<h3 className="text-sm font-medium text-white">
+										SHAP Explainability Engine
+									</h3>
+									<p className="text-xs text-text-tertiary mt-1">
+										Isolating predictive drivers for Lead #
+										{selectedCustomer?.row_id ?? "--"}
+									</p>
+								</div>
+								{selectedCustomer && (
+									<div className="text-right">
+										<div className="text-2xl font-semibold text-white tracking-tight">
+											{Math.round(
+												selectedCustomer.subscription_probability * 100,
+											)}
+											%
+										</div>
+										<div className="text-xs text-text-tertiary">
+											Conversion Propensity
+										</div>
+									</div>
+								)}
 							</div>
-							<div className="flex-1 p-4 flex flex-col min-h-0">
+							<div className="flex-1 p-6 flex flex-col min-h-0">
 								{!selectedCustomer ? (
-									<div className="flex-1 flex items-center justify-center font-mono text-[10px] text-text-muted">
-										AWAITING SELECTION
+									<div className="flex-1 flex items-center justify-center text-sm text-text-tertiary">
+										Select a lead from the roster to view attribution
 									</div>
 								) : (
 									<>
-										<div className="flex justify-between font-mono text-[10px] text-text-muted mb-4 border-b border-border-hairline pb-2">
-											<span>{"<-- NEGATIVE IMPACT [-]"}</span>
-											<span>{"[+] POSITIVE IMPACT -->"}</span>
+										<div className="flex justify-between text-xs font-medium text-text-tertiary mb-6 px-4">
+											<span className="flex items-center gap-2">
+												<div className="w-2 h-2 rounded bg-[#333333]"></div>{" "}
+												Frictional Drivers (-)
+											</span>
+											<span className="flex items-center gap-2">
+												Propensity Drivers (+){" "}
+												<div className="w-2 h-2 rounded bg-white"></div>
+											</span>
 										</div>
 										<div className="flex-1 min-h-0">
 											<ResponsiveContainer width="100%" height="100%">
 												<BarChart
 													layout="vertical"
 													data={shapData}
-													margin={{ top: 0, right: 20, left: 20, bottom: 0 }}
+													margin={{ top: 0, right: 10, left: 20, bottom: 0 }}
 												>
 													<XAxis
 														type="number"
@@ -622,28 +487,27 @@ export default function XAIBankAnalyzerV2() {
 														type="category"
 														axisLine={false}
 														tickLine={false}
-														tick={{
-															fill: "#A0A0A0",
-															fontSize: 10,
-															fontFamily: "monospace",
-														}}
-														width={80}
+														tick={{ fill: "#A1A1AA", fontSize: 12 }}
+														width={120}
 													/>
-													<ReferenceLine x={0} stroke="#383838" />
+													<ReferenceLine
+														x={0}
+														stroke="rgba(255,255,255,0.15)"
+														strokeDasharray="3 3"
+													/>
 													<Tooltip
-														cursor={{ fill: "#141414" }}
+														cursor={{ fill: "rgba(255,255,255,0.03)" }}
 														contentStyle={{
-															backgroundColor: "#000",
-															borderColor: "#383838",
-															borderRadius: 0,
-															fontFamily: "monospace",
-															fontSize: "11px",
+															backgroundColor: "#121212",
+															borderColor: "rgba(255,255,255,0.05)",
+															borderRadius: "12px",
+															color: "#fff",
 														}}
 													/>
 													<Bar
 														dataKey="value"
-														barSize={12}
-														isAnimationActive={false}
+														barSize={24}
+														radius={[4, 4, 4, 4]}
 													>
 														{shapData.map((entry, index) => (
 															<Cell
@@ -651,130 +515,241 @@ export default function XAIBankAnalyzerV2() {
 																fill={
 																	entry.type === "positive"
 																		? "#FFFFFF"
-																		: "#141414"
+																		: "#333333"
 																}
-																stroke={
-																	entry.type === "negative" ? "#FFFFFF" : "none"
-																}
-																strokeWidth={1}
 															/>
 														))}
 													</Bar>
 												</BarChart>
 											</ResponsiveContainer>
 										</div>
-										<div className="mt-2 text-[9px] font-mono text-text-muted border-t border-border-hairline pt-2">
-											WHITE = POSITIVE DRIVER | OUTLINED = NEGATIVE SHIFTER
-										</div>
 									</>
 								)}
 							</div>
 						</div>
+					</div>
 
-						{/* RAW DATA JSON Viewer (Col 3) */}
-						<div className="col-span-3 bg-surface-1 flex flex-col min-h-0">
-							<div className="p-2 border-b border-border-hairline bg-surface-2 flex justify-between">
-								<span className="font-mono text-[10px] text-text-med tracking-widest">
-									[ RAW DATA // JSON ]
-								</span>
+					{/* 3. TERTIARY CONTEXT ROW (Bottom Row) */}
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 shrink-0 h-48">
+						{/* Customer Profile Context */}
+						<div className="bg-surface-1 border border-border-subtle rounded-2xl flex flex-col overflow-hidden">
+							<div className="p-3 border-b border-border-subtle shrink-0">
+								<h3 className="text-xs font-medium text-white">
+									Lead Demographics
+								</h3>
 							</div>
-							<div className="flex-1 p-2 overflow-auto bg-surface-1">
+							<div className="flex-1 overflow-auto p-4">
 								{!selectedCustomer ? (
-									<div className="flex h-full items-center justify-center font-mono text-[10px] text-text-muted">
-										NO DATA
+									<div className="flex h-full items-center justify-center text-xs text-text-tertiary">
+										No lead selected
 									</div>
 								) : (
-									<pre className="font-mono text-[10px] text-text-med leading-relaxed whitespace-pre-wrap">
-										{JSON.stringify(selectedCustomer.raw_data, null, 2)}
-									</pre>
+									<div className="grid grid-cols-2 gap-y-3 gap-x-4">
+										{Object.entries(selectedCustomer.raw_data)
+											.slice(0, 6)
+											.map(([key, value]) => (
+												<div key={key}>
+													<div className="text-[10px] font-medium text-text-tertiary mb-0.5 capitalize">
+														{key.replace(/_/g, " ")}
+													</div>
+													<div className="text-xs text-text-primary font-medium truncate">
+														{value === null || value === ""
+															? "--"
+															: value.toString()}
+													</div>
+												</div>
+											))}
+									</div>
 								)}
+							</div>
+						</div>
+
+						{/* Macro: Histogram */}
+						<div className="bg-surface-1 border border-border-subtle rounded-2xl p-4 flex flex-col">
+							<div className="text-xs font-medium text-white mb-3">
+								Cohort Propensity Distribution
+							</div>
+							<div className="flex-1 min-h-0">
+								<ResponsiveContainer width="100%" height="100%">
+									<BarChart
+										data={histogramData}
+										margin={{ top: 5, right: 0, left: -25, bottom: 0 }}
+									>
+										<XAxis
+											dataKey="range"
+											tick={{ fill: "#71717A", fontSize: 10 }}
+											axisLine={false}
+											tickLine={false}
+										/>
+										<YAxis
+											tick={{ fill: "#71717A", fontSize: 10 }}
+											axisLine={false}
+											tickLine={false}
+										/>
+										<Tooltip
+											cursor={{ fill: "#1A1A1A" }}
+											contentStyle={{
+												backgroundColor: "#121212",
+												borderColor: "rgba(255,255,255,0.05)",
+												borderRadius: "12px",
+												color: "#fff",
+												fontSize: "12px",
+											}}
+										/>
+										<Bar dataKey="count" fill="#333333" radius={[4, 4, 4, 4]}>
+											{histogramData.map((entry, index) => (
+												<Cell
+													key={`cell-${index}`}
+													fill={
+														entry.count ===
+														Math.max(...histogramData.map((d) => d.count))
+															? "#FFFFFF"
+															: "#333333"
+													}
+												/>
+											))}
+										</Bar>
+									</BarChart>
+								</ResponsiveContainer>
+							</div>
+						</div>
+
+						{/* Macro: Jobs */}
+						<div className="bg-surface-1 border border-border-subtle rounded-2xl p-4 flex flex-col">
+							<div className="text-xs font-medium text-white mb-3">
+								Top Cohort Segments
+							</div>
+							<div className="flex-1 min-h-0">
+								<ResponsiveContainer width="100%" height="100%">
+									<BarChart
+										layout="vertical"
+										data={jobData}
+										margin={{ top: 0, right: 10, left: -5, bottom: 0 }}
+									>
+										<XAxis type="number" hide />
+										<YAxis
+											dataKey="job"
+											type="category"
+											tick={{ fill: "#A1A1AA", fontSize: 10 }}
+											axisLine={false}
+											tickLine={false}
+											width={80}
+										/>
+										<Tooltip
+											cursor={{ fill: "#1A1A1A" }}
+											contentStyle={{
+												backgroundColor: "#121212",
+												borderColor: "rgba(255,255,255,0.05)",
+												borderRadius: "12px",
+												color: "#fff",
+												fontSize: "12px",
+											}}
+										/>
+										<Bar
+											dataKey="count"
+											fill="#FFFFFF"
+											radius={[4, 4, 4, 4]}
+											barSize={12}
+										/>
+									</BarChart>
+								</ResponsiveContainer>
 							</div>
 						</div>
 					</div>
 				</div>
 
-				{/* RIGHT COLUMN: Permanent AI Sidecar (3 cols) */}
-				<div className="col-span-3 bg-surface-1 border border-border-hairline flex flex-col min-h-0">
-					<div className="p-2 border-b border-border-hairline bg-text-high text-text-inv flex justify-between">
-						<span className="font-mono text-[10px] font-bold tracking-widest">
-							[ GEMINI_AI // CLI_V2.0 ]
+				{/* RIGHT PANE: EXECUTIVE ADVISORY ASSISTANT (3 Cols) */}
+				<div className="lg:col-span-3 bg-surface-1 border border-border-subtle rounded-2xl flex flex-col overflow-hidden">
+					<div className="p-4 border-b border-border-subtle shrink-0 flex items-center justify-between">
+						<div className="flex items-center gap-2">
+							<div className="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center">
+								<SparklesIcon />
+							</div>
+							<h3 className="text-sm font-medium text-white">
+								Advisory Assistant
+							</h3>
+						</div>
+						<span className="text-[10px] font-medium uppercase text-text-tertiary bg-white/5 px-2 py-1 rounded-full">
+							Active
 						</span>
-						<span className="font-mono text-[10px]">[ {">_"} ]</span>
 					</div>
 
-					<div className="p-2 border-b border-border-hairline bg-surface-2 font-mono text-[9px] text-text-muted flex justify-between">
-						<span>CONTEXT: BATCH_#{new Date().getHours()}</span>
-						<span className="text-text-high">[ENGINE_ONLINE]</span>
-					</div>
-
-					<div className="flex-1 p-3 overflow-y-auto font-mono text-[11px] space-y-4">
-						<div className="text-text-muted">
-							<span className="text-text-high">sys://gemini_init:</span>{" "}
-							Quantitative Explainer loaded. Hooked to batch context. Type query
-							to execute analysis.
+					<div className="flex-1 overflow-y-auto p-4 space-y-5">
+						<div className="flex flex-col">
+							<div className="self-start max-w-[85%] bg-surface-2 border border-border-subtle rounded-2xl rounded-tl-sm p-3 text-sm text-text-secondary leading-relaxed">
+								Explainability Engine loaded. I am ready to summarize conversion
+								friction or suggest outreach strategies for this cohort.
+							</div>
 						</div>
 
 						{chatMessages.map((msg, i) => (
-							<div key={i} className="flex flex-col gap-1">
-								{msg.role === "user" ? (
-									<div className="text-text-med">
-										<span className="text-text-high font-bold">
-											{"> USER:"}
-										</span>{" "}
-										{msg.text}
-									</div>
-								) : (
-									<div className="text-text-high pl-3 border-l border-border-structural whitespace-pre-wrap">
-										<span className="text-text-med font-bold">
-											{"GEMINI: "}
-										</span>
-										{msg.text}
-									</div>
-								)}
+							<div
+								key={i}
+								className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+							>
+								<div
+									className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed
+                  ${
+										msg.role === "user"
+											? "bg-white text-black rounded-tr-sm font-medium"
+											: "bg-surface-2 border border-border-subtle text-text-primary rounded-tl-sm"
+									}`}
+								>
+									{msg.text}
+								</div>
 							</div>
 						))}
 
 						{isChatLoading && (
-							<div className="text-text-muted animate-pulse">
-								{"> GEMINI:"} Computing response...
+							<div className="flex flex-col items-start">
+								<div className="bg-surface-2 border border-border-subtle rounded-2xl rounded-tl-sm p-3 flex gap-1.5 items-center">
+									<div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce" />
+									<div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.2s]" />
+									<div className="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:0.4s]" />
+								</div>
 							</div>
 						)}
 					</div>
 
-					<div className="p-2 border-t border-border-hairline bg-surface-2 flex items-center gap-2">
-						<span className="font-mono text-text-high text-[11px] shrink-0 font-bold">
-							{"root@xai:~#"}
-						</span>
-						<input
-							type="text"
-							value={chatInput}
-							onChange={(e) => setChatInput(e.target.value)}
-							onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-							placeholder="Type query or command..."
-							className="flex-1 bg-transparent border-none outline-none font-mono text-[11px] text-text-high placeholder:text-text-muted"
-						/>
-						<button
-							onClick={handleSendMessage}
-							disabled={isChatLoading || !chatInput.trim()}
-							className="bg-text-high text-text-inv font-mono text-[10px] font-bold px-2 py-1 disabled:opacity-50 transition-none hover:bg-text-med uppercase"
-						>
-							[Exec]
-						</button>
+					<div className="p-3 border-t border-border-subtle shrink-0 bg-surface-1">
+						<div className="relative flex items-center">
+							<input
+								type="text"
+								value={chatInput}
+								onChange={(e) => setChatInput(e.target.value)}
+								onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+								placeholder="Ask advisory assistant..."
+								className="w-full bg-surface-2 border border-border-focus rounded-xl py-2.5 pl-4 pr-10 text-sm text-white placeholder:text-text-tertiary focus:outline-none focus:border-white/30 transition-colors"
+							/>
+							<button
+								onClick={handleSendMessage}
+								disabled={isChatLoading || !chatInput.trim()}
+								className="absolute right-2 p-1.5 rounded-lg bg-white text-black disabled:opacity-50 hover:bg-white/80 transition-colors"
+							>
+								<ArrowUpRight className="w-4 h-4" />
+							</button>
+						</div>
 					</div>
 				</div>
 			</div>
-
-			{/* FOOTER BAR */}
-			<div className="bg-canvas border-t border-border-hairline p-1 flex justify-between font-mono text-[9px] text-text-muted mt-auto">
-				<div className="flex gap-4">
-					<span>■ FED-SR 11-7 VALIDATED</span>
-					<span>// ZERO COLOR DRIFT</span>
-				</div>
-				<div>
-					<span>NODE: NYC-FIN-CORE-04</span>
-					<span className="ml-4 text-text-high">STATUS: [OPTIMAL]</span>
-				</div>
-			</div>
 		</div>
+	);
+}
+
+// Simple custom SVG for the Sovereign Sparkle icon
+function SparklesIcon() {
+	return (
+		<svg
+			width="12"
+			height="12"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="M12 3v18M3 12h18M18.364 5.636l-12.728 12.728M5.636 5.636l12.728 12.728" />
+		</svg>
 	);
 }

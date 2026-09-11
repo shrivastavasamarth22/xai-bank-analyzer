@@ -4,48 +4,43 @@
 @theme {
   /* Canvas & Surfaces */
   --color-canvas: #000000;
-  --color-surface-1: #0D0D0D;
-  --color-surface-2: #141414;
-  --color-surface-3: #1E1E1E;
+  --color-surface-1: #121212;
+  --color-surface-2: #1A1A1A;
+  --color-surface-3: #222222;
   
-  /* Structural Borders */
-  --color-border-hairline: #2D2D2D;
-  --color-border-structural: #383838;
-  --color-border-active: #FFFFFF;
+  /* Borders */
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-focus: rgba(255, 255, 255, 0.15);
   
   /* Typographic Contrast */
-  --color-text-high: #FFFFFF;
-  --color-text-med: #A0A0A0;
-  --color-text-muted: #5A5A5A;
-  --color-text-inv: #000000;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A1A1AA;
+  --color-text-tertiary: #71717A;
+  --color-text-inverse: #000000;
 
-  /* Typography */
-  --font-structural: var(--font-geist), sans-serif;
-  --font-mono: var(--font-jetbrains), monospace;
+  /* Typography (Enforcing Sans-Serif Everywhere) */
+  --font-sans: var(--font-geist), system-ui, sans-serif;
 }
 
 @layer base {
   body {
-    @apply bg-canvas text-text-high font-structural antialiased;
-    /* Force tabular numerals for all data to prevent jitter */
+    @apply bg-canvas text-text-primary font-sans antialiased;
+    /* Force tabular numerals for all data to prevent jitter without using monospace */
     font-variant-numeric: tabular-nums lining-nums;
   }
 
-  /* Hard, brutalist scrollbar */
+  /* Elegant, minimal scrollbar */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-canvas border-l border-border-hairline;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-border-structural rounded-none;
+    @apply bg-white/10 rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-med;
-  }
-  ::-webkit-scrollbar-corner {
-    @apply bg-canvas;
+    @apply bg-white/20;
   }
 }
